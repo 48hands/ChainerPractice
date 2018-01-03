@@ -137,3 +137,21 @@ y = chainer.functions.sigmonid(x)
 optimizer = chainer.optimizers.SGD()
 ```
 
+## 3. Iris(あやめ)データセットを使った品種分類
+
+### 概要
+
+* 各花ごとに4つの測定値＋品種のデータ：全部で150組
+* 測定値
+    * Sepal length(萼の長さ)
+    * Sepal width(萼の幅)
+    * Petal lengh(花弁の長さ)
+    * Petal width(花弁の幅)
+* 品種
+    * 0: Setosa
+    * 1: Versicolor
+    * 2: Versinica
+* 4層からなるニューラルネットワーク
+    * 入力層: 4つのニューロン(各測定値に対応)
+    * 中間層: 2つ、それぞれ6つのニューロン
+    * 出力層: 3つのニューロン(各品種に対応)
