@@ -69,7 +69,7 @@ class Iris:
     @staticmethod
     def convert_to_variable(x_train, t_train, x_test):
         """
-
+        numpyの形式からVariableに変換するためのメソッド
         :param x_train:
         :param t_train:
         :param x_test:
@@ -163,6 +163,9 @@ class IrisClassification:
 
 
 class Main:
+    """
+    メイン処理記述用のクラス
+    """
 
     def nn_execute(self):
         """
