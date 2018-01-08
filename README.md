@@ -146,7 +146,7 @@ optimizer = chainer.optimizers.SGD()
 * 測定値
     * Sepal length(萼の長さ)
     * Sepal width(萼の幅)
-    * Petal lengh(花弁の長さ)
+    * Petal lengh(花弁の長さ)
     * Petal width(花弁の幅)
 * 品種
     * 0: Setosa
