@@ -40,7 +40,7 @@ class Iris:
         :return:
         """
 
-        # 訓練用とテスト用にでデータを分割しておく
+        # 訓練用とテスト用にデータを分割しておく
         x_train, x_test, t_train, t_test = train_test_split(
             x, t, test_size=0.5, random_state=0
         )

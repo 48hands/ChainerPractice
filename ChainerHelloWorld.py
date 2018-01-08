@@ -1,25 +1,42 @@
 # coding: UTF-8
 
 import chainer
-from chainer import Variable, Chain, optimizers
+from chainer import Variable, Chain, optimizers, serializers
 import chainer.links as L
 import chainer.functions as F
-import numpy as np
+
+from chainer.training import extensions
+from chainer.datasets import tuple_dataset
+from chainer import training, iterators
 
 import matplotlib.pyplot as plt
+import numpy as np
 
-# 階段関数のデータ
-x, t = [], []
-for i in np.linspace(-1, 1, 100):
-    x.append([i])
-    if i < 0:
-        t.append([0])
-    else:
-        t.append([1])
 
-# plt.plot(np.array(x, dtype=np.float32).flatten(),
-#          np.array(t, dtype=np.float32).flatten())
-# plt.show()
+class StairsData:
+
+    def __init__(self):
+        x, t = [], []
+        for i in np.linspace(-1, 1, 100):
+            x.append([i])
+            if i < 0:
+                t.append([0])
+            else:
+                t.append([1])
+
+        self.x = np.array(x, dtype=np.float32)
+        self.t = np.array(t, dtype=np.float32)
+
+    def train(self):
+        train = tuple_dataset.TupleDataset(self.x, self.t)
+        return train
+
+    @staticmethod
+    def data():
+        """
+        階段関数のデータ
+        :return:
+        """
 
 
 class MyChain(Chain):
@@ -34,44 +51,47 @@ class MyChain(Chain):
             l2=L.Linear(10, 1),
         )
 
-    def __call__(self, x):
-        # sigmoid関数
-        h1 = F.sigmoid(self.l1(x))
-        return self.l2(h1)
+    def predict(self, x):
+        h1 = F.sigmoid(self.l1(x))  # 活性化関数はsigmoid関数
+        h2 = self.l2(h1)
+        return h2
+
+    def __call__(self, x, t):
+        return F.mean_squared_error(self.predict(x), t)
 
 
-# Variableの記述
-# x,tをVariableのオブジェクトとして上書き
-x = Variable(np.array(x, dtype=np.float32))
-t = Variable(np.array(t, dtype=np.float32))
+class HelloWorldClassification:
 
-model = MyChain()
+    def __init__(self):
+        self.model = MyChain()
+        self.optimizer = chainer.optimizers.Adam()
+        self.optimizer.setup(self.model)
+        self.data = StairsData()
 
-# Optimizerの記述
-optimizer = chainer.optimizers.Adam()
-optimizer.setup(model)  # モデルのセットアップ
+    def train(self):
+        # 一回の学習で20セットを利用する。ミニバッチ学習
+        train_iter = iterators.SerialIterator(self.data.train(), 20)
 
-# 学習
-y = None
-for i in range(100000):
+        # updaterの生成
+        updater = training.StandardUpdater(train_iter, self.optimizer)
 
-    model.cleargrads()
-    y = model(x)
+        # 20000エポック学習する
+        trainer = training.Trainer(updater, (20000, 'epoch'))
 
-    # 学習過程の表示
-    if i % 10000 == 0:
-        plt.plot(x.data.flatten(), y.data.flatten())
-        plt.title("i = " + str(i))
+        # 学習状況をプログレスバーで出力
+        trainer.extend(extensions.ProgressBar())
+
+        # 学習の実行
+        trainer.run()
+
+    def result(self):
+        y = self.model.predict(self.data.x)
+        plt.plot(self.data.x.flatten(), y.data.flatten())
+        plt.show("Finish!")
         plt.show()
 
-    # 損失関数による誤算の計算、平均二乗誤差を採用
-    loss = F.mean_squared_error(y, t)
-    loss.backward()
 
-    # Optimizerによる重みの更新
-    optimizer.update()
-
-# 結果の表示
-plt.plot(x.data.flatten(), y.data.flatten())
-plt.show("Finish!")
-plt.show()
+if __name__ == '__main__':
+    classification = HelloWorldClassification()
+    classification.train()
+    classification.result()
