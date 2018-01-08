@@ -1,9 +1,12 @@
 # coding: UTF-8
 
-import chainer
-from chainer import Variable, Chain, optimizers
+from chainer import Variable, Chain, optimizers, serializers
 import chainer.links as L
 import chainer.functions as F
+
+from chainer.training import extensions
+from chainer.datasets import tuple_dataset
+from chainer import training, iterators
 
 import numpy as np
 from sklearn import datasets
@@ -14,9 +17,6 @@ class Iris:
     """
     Irisデータクラス
     """
-
-    def __init__(self):
-        pass
 
     @staticmethod
     def load_iris():
@@ -66,11 +66,12 @@ class Iris:
         :param x_test:
         :return:
         """
-        x_train_v = Variable(x_train)
-        t_train_v = Variable(t_train)
+
         x_test_v = Variable(x_test)
 
-        return x_train_v, x_test_v, t_train_v
+        train = tuple_dataset.TupleDataset(x_train, t_train)
+
+        return train, x_test_v
 
 
 class IrisChain(Chain):
@@ -86,11 +87,15 @@ class IrisChain(Chain):
             l3=L.Linear(6, 3),
         )
 
-    def __call__(self, x):
+    def predict(self, x):
         h1 = F.sigmoid(self.l1(x))
         h2 = F.sigmoid(self.l2(h1))
         h3 = self.l3(h2)
         return h3
+
+    # trainerを用いる場合、callメソッドに誤差を返さないといけない
+    def __call__(self, x, t):
+        return F.mean_squared_error(self.predict(x), t)
 
 
 class IrisClassification:
@@ -103,26 +108,41 @@ class IrisClassification:
         self.optimizer = optimizers.Adam()  # 最適化アルゴリズムにAdam
         self.optimizer.setup(self.model)  # オプティマイザとモデルの紐付け
 
-    def train(self, x_train_v, t_train_v):
+    def train(self, train):
         """
         学習用のメソッド
-        :param x_train_v:
-        :param t_train_v:
+        :param train: TupleDataset
         :return:
         """
-        for i in range(10000):
-            self.model.cleargrads()  # モデルの勾配をクリア
-            y_train_v = self.model(x_train_v)  # モデルから予測値を算出
 
-            # 損失関数による誤差の計算
-            loss = F.mean_squared_error(y_train_v, t_train_v)  # 損失関数: 二乗誤差
-            # loss = F.softmax_cross_entropy(y_train_v,t_train_v) # 損失関数: 交差エントロピー
+        # 一回の学習で30セット使う。ミニバッチ方式
+        train_iter = iterators.SerialIterator(train, 30)
 
-            # 誤差の逆伝播
-            loss.backward()
+        # updaterの生成
+        updater = training.StandardUpdater(train_iter, self.optimizer)
 
-            # Optimizerによる重みの更新
-            self.optimizer.update()
+        # 5000エポック学習する
+        trainer = training.Trainer(updater, (5000, 'epoch'))
+
+        # プログレスバーで学習の進行状況を表示する
+        trainer.extend(extensions.ProgressBar())
+
+        # 学習の実行
+        trainer.run()
+
+    def save_model(self):
+        """
+        学習モデルの保存
+        :return:
+        """
+        serializers.save_npz("my_iris.npz", self.model)
+
+    def load_model(self):
+        """
+        学習モデルのロード
+        :return:
+        """
+        serializers.load_npz("my_iris.npz", self.model)
 
     def test(self, x_test_v):
         """
@@ -132,7 +152,7 @@ class IrisClassification:
         """
         self.model.cleargrads()  # モデルの勾配を削除
 
-        y_test_v = self.model(x_test_v)  # テストデータに対して予測を実行
+        y_test_v = self.model.predict(x_test_v)  # テストデータに対して予測を実行
 
         # y_test_vはVariableオブジェクトのため、そこからデータを取り出す。
         # y_testはnumpyの形式
@@ -167,32 +187,47 @@ class Main:
     メイン処理記述用のクラス
     """
 
-    def nn_execute(self):
-        """
-        ニューラルネットワーク実行メソッド
-        :return:
-        """
-
+    def __init__(self):
         # Irisデータの読み込み
         x, t, n = Iris.load_iris()
 
         # Irisデータの前処理
-        x_train, x_test, t_train, t_test = Iris.preproc(x, t)
+        x_train, x_test, t_train, self.t_test = Iris.preproc(x, t)
 
         # データ形式をVariableに変換する
-        x_train_v, x_test_v, t_train_v = \
+        self.train, self.x_test_v = \
             Iris.convert_to_variable(x_train, x_test, t_train)
+
+    def test_execute(self):
+        """
+        テスト用データの検証
+        :return:
+        """
+        iris_classification = IrisClassification()
+
+        # 永続化されたモデルファイルの読み込み
+        iris_classification.load_model()
+
+        # テスト
+        y_test = iris_classification.test(self.x_test_v)
+
+        # 正解数のカウント
+        iris_classification.count_correct(y_test, self.t_test)
+
+    def train_execute(self):
+        """
+        訓練データによる学習実行
+        :return:
+        """
 
         # 学習
         iris_classification = IrisClassification()
-        iris_classification.train(x_train_v, t_train_v)
+        iris_classification.train(self.train)
 
-        # テスト
-        y_test = iris_classification.test(x_test_v)
-
-        # 正解数のカウント
-        iris_classification.count_correct(y_test, t_test)
+        # 学習結果を保存
+        iris_classification.save_model()
 
 
 if __name__ == '__main__':
-    Main().nn_execute()
+    Main().train_execute()
+    Main().test_execute()
