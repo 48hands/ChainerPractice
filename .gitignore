@@ -108,4 +108,5 @@ venv.bak/
 .idea/*
 .DS_Store
 
-my_iris.npz
+iris.npz
+mnist.npz

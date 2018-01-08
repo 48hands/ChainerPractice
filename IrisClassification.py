@@ -135,14 +135,14 @@ class IrisClassification:
         学習モデルの保存
         :return:
         """
-        serializers.save_npz("my_iris.npz", self.model)
+        serializers.save_npz("iris.npz", self.model)
 
     def load_model(self):
         """
         学習モデルのロード
         :return:
         """
-        serializers.load_npz("my_iris.npz", self.model)
+        serializers.load_npz("iris.npz", self.model)
 
     def test(self, x_test_v):
         """
