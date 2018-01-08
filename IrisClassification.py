@@ -7,6 +7,7 @@ import chainer.functions as F
 
 import numpy as np
 from sklearn import datasets
+from sklearn.model_selection import train_test_split
 
 
 class Iris:
@@ -27,47 +28,37 @@ class Iris:
         x = iris_data.data.astype(np.float32)  # float32型に変換しておく
         t = iris_data.target
         n = t.size
+
         return x, t, n
 
     @staticmethod
-    def preproc(x, t, n):
+    def preproc(x, t):
         """
         Irisデータの前処理
         :param x:
         :param t:
-        :param n:
         :return:
         """
+
+        # 訓練用とテスト用にでデータを分割しておく
+        x_train, x_test, t_train, t_test = train_test_split(
+            x, t, test_size=0.5, random_state=0
+        )
+
         # 二重配列を作成する
-        t_matrix = np.zeros(3 * n) \
-            .reshape(n, 3) \
-            .astype(np.float32)
+        n = np.size(t_train)
+        t_train_matrix = np.zeros(3 * n).reshape(n, 3).astype(np.float32)
 
         # 二重配列の正解値の位置を1.0にする。
         for i in range(n):
-            t_matrix[i, t[i]] = 1.0
+            t_train_matrix[i, t_train[i]] = 1.0
 
-        # print(t_matrix)
+        t_train = t_train_matrix
 
-        # 訓練用のデータとテスト用のデータに分割
-        # 半分が訓練用データ、残りがテスト用データ
-        indexes = np.arange(n)
-        indexes_train = indexes[indexes % 2 != 0]
-        indexes_test = indexes[indexes % 2 == 0]
-
-        # print(indexes)
-        # print(indexes_train)
-        # print(indexes_test)
-
-        x_train = x[indexes_train, :]  # 訓練用 入力
-        t_train = t_matrix[indexes_train, :]  # 訓練用 正解
-        x_test = x[indexes_test, :]  # テスト用 入力
-        t_test = t[indexes_test]  # テスト用　正解
-
-        return x_train, t_train, x_test, t_test
+        return x_train, x_test, t_train, t_test
 
     @staticmethod
-    def convert_to_variable(x_train, t_train, x_test):
+    def convert_to_variable(x_train, x_test, t_train):
         """
         numpyの形式からVariableに変換するためのメソッド
         :param x_train:
@@ -79,7 +70,7 @@ class Iris:
         t_train_v = Variable(t_train)
         x_test_v = Variable(x_test)
 
-        return x_train_v, t_train_v, x_test_v
+        return x_train_v, x_test_v, t_train_v
 
 
 class IrisChain(Chain):
@@ -109,8 +100,8 @@ class IrisClassification:
 
     def __init__(self):
         self.model = IrisChain()
-        self.optimizer = optimizers.Adam()
-        self.optimizer.setup(self.model)
+        self.optimizer = optimizers.Adam()  # 最適化アルゴリズムにAdam
+        self.optimizer.setup(self.model)  # オプティマイザとモデルの紐付け
 
     def train(self, x_train_v, t_train_v):
         """
@@ -125,7 +116,10 @@ class IrisClassification:
 
             # 損失関数による誤差の計算
             loss = F.mean_squared_error(y_train_v, t_train_v)  # 損失関数: 二乗誤差
-            loss.backward()  # 誤差の逆伝播
+            # loss = F.softmax_cross_entropy(y_train_v,t_train_v) # 損失関数: 交差エントロピー
+
+            # 誤差の逆伝播
+            loss.backward()
 
             # Optimizerによる重みの更新
             self.optimizer.update()
@@ -136,11 +130,14 @@ class IrisClassification:
         :param x_test_v:
         :return:
         """
-        self.model.cleargrads()
-        y_test_v = self.model(x_test_v)
+        self.model.cleargrads()  # モデルの勾配を削除
+
+        y_test_v = self.model(x_test_v)  # テストデータに対して予測を実行
+
         # y_test_vはVariableオブジェクトのため、そこからデータを取り出す。
         # y_testはnumpyの形式
         y_test = y_test_v.data
+
         return y_test
 
     def count_correct(self, y_test, t_test):
@@ -151,7 +148,10 @@ class IrisClassification:
         :return:
         """
         correct = 0
-        row_count = y_test.shape[0]  # y_testの要素数
+
+        # y_testの要素数
+        row_count = y_test.shape[0]
+
         for i in range(row_count):
             max_index = np.argmax(y_test[i, :])  # np.argmax関数は最大の要素のインデックスを返す
             print(y_test[i, :], max_index)
@@ -177,12 +177,11 @@ class Main:
         x, t, n = Iris.load_iris()
 
         # Irisデータの前処理
-        x_train, t_train, x_test, t_test = \
-            Iris.preproc(x, t, n)
+        x_train, x_test, t_train, t_test = Iris.preproc(x, t)
 
         # データ形式をVariableに変換する
-        x_train_v, t_train_v, x_test_v = \
-            Iris.convert_to_variable(x_train, t_train, x_test)
+        x_train_v, x_test_v, t_train_v = \
+            Iris.convert_to_variable(x_train, x_test, t_train)
 
         # 学習
         iris_classification = IrisClassification()
